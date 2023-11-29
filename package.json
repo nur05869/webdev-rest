@@ -3,10 +3,10 @@
     "description": "REST Server",
     "version": "1.0.0",
     "author": {
-        "name": "",
-        "email": ""
+        "name": "Brahima Ann",
+        "email": "ann05026@stthomas.edu"
     },
-    "contributors": [
+    "contributors": ["Anthony Shishkin, Ridwan Nur"
     ],
     "repository": {},
     "dependencies": {

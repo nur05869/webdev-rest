@@ -57,123 +57,173 @@ function dbRun(query, params) {
  ***   REST REQUEST HANDLERS                                      *** 
  ********************************************************************/
 // GET request handler for crime codes
-app.get('/codes', async (req, res) => {
-    console.log(req.query);
+app.get('/codes', (req, res) => {
     try {
         let query = 'SELECT * FROM Codes';
-        const params = [];
+        let params = [];
 
-        // Check if 'code' query parameter is present
+        // Check if the 'code' query parameter is provided
         if (req.query.code) {
             const codeList = req.query.code.split(',').map(Number);
-            if (codeList.length > 0) {
-                query += ' WHERE code IN (' + codeList.map(() => '?').join(',') + ')';
-                params.push(...codeList);
-            }
+            query += ' WHERE code IN (' + codeList.map(() => '?').join(',') + ')';
+            params = codeList;
         }
 
-        const codes = await dbSelect(query, params);
-        res.status(200).type('json').send(codes);
+        query += ' ORDER BY code';
+
+        // Execute the query synchronously
+        db.all(query, params, (err, rows) => {
+            if (err) {
+                console.error(err);
+                res.status(500).send('Internal Server Error');
+            } else {
+                res.status(200).type('json').send(rows);
+            }
+        });
     } catch (error) {
         console.error(error);
         res.status(500).send('Internal Server Error');
     }
 });
+
 
 
 
 
 // GET request handler for neighborhoods
-app.get('/neighborhoods', async (req, res) => {
-    try {
-        const neighborhoods = await dbSelect('SELECT * FROM Neighborhoods ORDER BY neighborhood_number', []);
-        const formattedNeighborhoods = neighborhoods.map(({ neighborhood_number, neighborhood_name }) => ({
-            id: neighborhood_number,
-            name: neighborhood_name,
-        }));
-        res.status(200).type('json').send(formattedNeighborhoods);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Internal Server Error');
+app.get('/neighborhoods', (req, res) => {
+    const neighborhoodIds = req.query.id; // Assuming it's a comma-separated list
+
+    let query = 'SELECT * FROM Neighborhoods';
+
+    if (neighborhoodIds) {
+        const idsArray = neighborhoodIds.split(',').map(Number);
+        query += ` WHERE neighborhood_number IN (${idsArray.join(',')})`;
     }
+
+    db.all(query, [], (err, neighborhoods) => {
+        if (err) {
+            console.error(err);
+            res.status(500).send('Internal Server Error');
+        } else {
+            // Sort neighborhoods by id
+            neighborhoods.sort((a, b) => a.neighborhood_number - b.neighborhood_number);
+
+            const result = neighborhoods.map(({ neighborhood_number, neighborhood_name }) => ({
+                id: neighborhood_number,
+                name: neighborhood_name,
+            }));
+
+            res.status(200).type('json').send(result);
+        }
+    });
 });
+
 
 // GET request handler for crime incidents
-app.get('/incidents', async (req, res) => {
-    try {
-        const incidents = await dbSelect(`
-            SELECT 
-                case_number, 
-                strftime('%Y-%m-%d', date_time) as date, 
-                strftime('%H:%M:%S', date_time) as time,
-                code, 
-                incident, 
-                police_grid, 
-                neighborhood_number, 
-                block
-            FROM Incidents 
-            ORDER BY date_time`, []);
+// Endpoint to retrieve incidents with optional filters
+app.get('/incidents', (req, res) => {
+    // Base query with no filters
+    let query = 'SELECT * FROM incidents';
 
-        res.status(200).type('json').send(incidents);
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Internal Server Error');
+    let params = [];
+
+    let count = 0;
+
+
+    if (req.query.hasOwnProperty('code')) {
+        if (count > 0) {
+            query += " AND ";
+        } else {
+            query += " WHERE ";
+        }
+        query += "code = " + req.query.code;
+        count++;
     }
+
+    if (req.query.hasOwnProperty('grid')) {
+        if (count > 0) {
+            query += " AND ";
+        } else {
+            query += " WHERE ";
+        }
+        query += "police_grid = " + req.query.grid;
+        count++;
+    }
+
+    if (req.query.hasOwnProperty('id')) {
+        if (count > 0) {
+            query += " AND ";
+        } else {
+            query += " WHERE ";
+        }
+        query += "neighborhood_number = " + req.query.id;
+        count++;
+    }
+
+    if (req.query.hasOwnProperty('limit')) {
+        limit = req.query.limit;
+    }
+    query += " LIMIT " + 1000;
+
+    console.log('Final Query:', query);
+
+    dbSelect(query, params)
+        .then((rows) => {
+            res.status(200).type('json').send(rows);
+        })
+        .catch((error) => {
+            res.status(500).type('txt').send(error);
+        });
 });
+
+
 
 
 // PUT request handler for new crime incident
-app.put('/new-incident', async (req, res) => {
-    const { case_number, date, time, code, incident, police_grid, neighborhood_number, block } = req.body;
+app.put('/new-incident/:case_number', (req, res) => {
+    const case_number = req.params.case_number;
 
-    try {
-        // Check if the case_number already exists in the database
-        const existingIncident = await dbSelect('SELECT * FROM Incidents WHERE case_number = ?', [case_number]);
+    const { date_time, code, police_grid, neighborhood_number, block } = req.body;
 
-        if (existingIncident.length > 0) {
-            // Case number already exists, reject the request
-            res.status(500).send('Case number already exists in the database');
-        } else {
-            // Case number does not exist, proceed with the insertion
-            await dbRun('INSERT INTO Incidents VALUES (?, ?, ?, ?, ?, ?, ?)', [
-                case_number,
-                `${date} ${time}`, // Combine date and time into a single DATETIME string
-                code,
-                incident,
-                police_grid,
-                neighborhood_number,
-                block,
-            ]);
-
-            res.status(200).type('txt').send('OK');
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Internal Server Error');
+    if (!date_time || !code || !police_grid || !neighborhood_number || !block) {
+        res.status(400).json({ error: 'Missing required fields in the request body' });
+        return;
     }
+
+    const query = 'INSERT INTO incidents (case_number, date_time, code, police_grid, neighborhood_number, block) VALUES (?, ?, ?, ?, ?, ?)';
+    const params = [case_number, date_time, code, police_grid, neighborhood_number, block];
+
+    dbRun(query, params)
+        .then(() => {
+            res.status(200).json({ message: 'Incident added successfully' });
+        })
+        .catch((error) => {
+            res.status(500).json({ error: error.message });
+        });
 });
 
 
 // DELETE request handler for new crime incident
-app.delete('/remove-incident', async (req, res) => {
-    const { case_number } = req.body;
+app.delete('/remove-incident', (req, res) => {
+    const caseNumber = req.query.case_number;
 
-    try {
-        // Check if the case_number exists in the database
-        const existingIncident = await dbSelect('SELECT * FROM Incidents WHERE case_number = ?', [case_number]);
+    const query = 'DELETE FROM Incidents WHERE case_number = ?';
+    const params = [caseNumber];
 
-        if (existingIncident.length === 0) {
-            // Case number does not exist, reject the request
-            res.status(500).send('Case number does not exist in the database');
-        } else {
-            // Case number exists, proceed with the deletion
-            await dbRun('DELETE FROM Incidents WHERE case_number = ?', [case_number]);
-            res.status(200).type('txt').send('OK');
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Internal Server Error');
-    }
+    console.log('Delete Query:', query);
+
+    dbRun(query, params)
+        .then(() => {
+            console.log('Incident Removed');
+            res.status(200).json({ message: 'Incident removed successfully' });
+        })
+        .catch((error) => {
+            console.error('Error removing incident:', error.message);
+            res.status(500).json({ error: error.message });
+        });
+
+    console.log('Query Parameters:', params);
 });
 
 /********************************************************************
