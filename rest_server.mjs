@@ -11,9 +11,16 @@ const port = 8000;
 
 let app = express();
 app.use(express.json());
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'http://localhost:8001'); // Allow specific origin
+    // res.header('Access-Control-Allow-Origin', '*'); // Allow all origins (not recommended)
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    next();
+  });
 
 /********************************************************************
- ***   DATABASE FUNCTIONS                                         *** 
+ ***   DATABASE FUNCTIONS                                         ***
  ********************************************************************/
 // Open SQLite3 database (in read-write mode)
 let db = new sqlite3.Database(db_filename, sqlite3.OPEN_READWRITE, (err) => {
@@ -25,7 +32,7 @@ let db = new sqlite3.Database(db_filename, sqlite3.OPEN_READWRITE, (err) => {
     }
 });
 
-// Create Promise for SQLite3 database SELECT query 
+// Create Promise for SQLite3 database SELECT query
 function dbSelect(query, params) {
     return new Promise((resolve, reject) => {
         db.all(query, params, (err, rows) => {
@@ -54,7 +61,7 @@ function dbRun(query, params) {
 }
 
 /********************************************************************
- ***   REST REQUEST HANDLERS                                      *** 
+ ***   REST REQUEST HANDLERS                                      ***
  ********************************************************************/
 // GET request handler for crime codes
 app.get('/codes', (req, res) => {
@@ -89,7 +96,6 @@ app.get('/codes', (req, res) => {
 
 
 
-
 // GET request handler for neighborhoods
 app.get('/neighborhoods', (req, res) => {
     const neighborhoodIds = req.query.id; // Assuming it's a comma-separated list
@@ -119,72 +125,67 @@ app.get('/neighborhoods', (req, res) => {
     });
 });
 
-
 // GET request handler for crime incidents
 // Endpoint to retrieve incidents with optional filters
 app.get('/incidents', (req, res) => {
-    // Base query with no filters
+
+    //base query with no filters (DONE)
     let query = 'SELECT * FROM incidents';
 
+    //user params passed to dbSelect statement
     let params = [];
 
+    //Set count to 0 (tracks multiple filters)
     let count = 0;
 
+    //Set base limit (DONE)
+    var limit = 1000;
 
-    if (req.query.hasOwnProperty('code')) {
-        if (count > 0) {
-            query += " AND ";
-        } else {
-            query += " WHERE ";
-        }
+    if(req.query.hasOwnProperty('code')){
+        if(count > 0){query += " AND ";}
+        else{query += " WHERE "};
         query += "code = " + req.query.code;
         count++;
     }
 
-    if (req.query.hasOwnProperty('grid')) {
-        if (count > 0) {
-            query += " AND ";
-        } else {
-            query += " WHERE ";
-        }
+    if(req.query.hasOwnProperty('grid')){
+        if(count > 0){query += " AND ";}
+        else{query += " WHERE "};
         query += "police_grid = " + req.query.grid;
         count++;
     }
 
-    if (req.query.hasOwnProperty('id')) {
-        if (count > 0) {
-            query += " AND ";
-        } else {
-            query += " WHERE ";
-        }
+    if(req.query.hasOwnProperty('id')){
+        if(count > 0){query += " AND ";}
+        else{query += " WHERE "};
         query += "neighborhood_number = " + req.query.id;
+        console.log(query);
         count++;
     }
 
-    if (req.query.hasOwnProperty('limit')) {
-        limit = req.query.limit;
-    }
-    query += " LIMIT " + 1000;
 
-    console.log('Final Query:', query);
+    //Set limit to user amount or 1000 (DONE)
+    if(req.query.hasOwnProperty('limit')){
+        limit = req.query.limit;}
+    query += " LIMIT " + limit;
 
+
+    console.log(query);
+
+    // Select from database and send as json
     dbSelect(query, params)
-        .then((rows) => {
-            res.status(200).type('json').send(rows);
-        })
-        .catch((error) => {
-            res.status(500).type('txt').send(error);
-        });
+    .then((rows) => {
+        res.status(200).type('json').send(rows);
+    })
+    .catch((error) => {
+        res.status(500).type('txt').send(error);
+    });
 });
 
 
-
-
 // PUT request handler for new crime incident
-app.put('/new-incident/:case_number', (req, res) => {
-    const case_number = req.params.case_number;
-
-    const { date_time, code, police_grid, neighborhood_number, block } = req.body;
+app.put('/new-incident', (req, res) => {
+    const { case_number, date_time, code, police_grid, neighborhood_number, block } = req.body;
 
     if (!date_time || !code || !police_grid || !neighborhood_number || !block) {
         res.status(400).json({ error: 'Missing required fields in the request body' });
@@ -206,28 +207,34 @@ app.put('/new-incident/:case_number', (req, res) => {
 
 // DELETE request handler for new crime incident
 app.delete('/remove-incident', (req, res) => {
-    const caseNumber = req.query.case_number;
+    const caseNumber = req.body.case_number;
 
     const query = 'DELETE FROM Incidents WHERE case_number = ?';
     const params = [caseNumber];
 
     console.log('Delete Query:', query);
-
-    dbRun(query, params)
-        .then(() => {
-            console.log('Incident Removed');
-            res.status(200).json({ message: 'Incident removed successfully' });
-        })
-        .catch((error) => {
-            console.error('Error removing incident:', error.message);
-            res.status(500).json({ error: error.message });
-        });
+    dbSelect('SELECT * FROM Incidents WHERE case_number = ?', [params])
+    .then((rows)=> {
+        if (rows.length == 0) {
+            throw 'error case number does not exist';
+        } else {
+            return dbRun(query, params);
+        }
+    })
+    .then(() => {
+        console.log('Incident Removed');
+        res.status(200).json({ message: 'Incident removed successfully' });
+    })
+    .catch((error) => {
+        console.error('Error removing incident:', error.message);
+        res.status(500).json({ error: error.message });
+    });
 
     console.log('Query Parameters:', params);
 });
 
 /********************************************************************
- ***   START SERVER                                               *** 
+ ***   START SERVER                                               ***
  ********************************************************************/
 // Start server - listen for client connections
 app.listen(port, () => {
