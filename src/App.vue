@@ -1,5 +1,8 @@
 <script setup>
 import { reactive, ref, onMounted } from "vue";
+import CrimeTable from "@/CrimeTable.vue";
+
+
 
 let crime_url = ref("");
 let dialog_err = ref(false);
@@ -529,9 +532,39 @@ function codeToIncident(code) {
     return "Foot Patrol";
   }
 }
+
+const styleTableRows = (incident) => {
+  const lowerCaseIncident = incident.toLowerCase();
+
+  if (
+    lowerCaseIncident.includes("arson") ||
+    lowerCaseIncident.includes("assault") ||
+    lowerCaseIncident.includes("homicide") ||
+    lowerCaseIncident.includes("murder") ||
+    lowerCaseIncident.includes("rape") ||
+    lowerCaseIncident.includes("robbery")
+  ) {
+    return "highlight-red"; // Violent crimes - RED
+  } else if (
+    lowerCaseIncident.includes("burglary") ||
+    lowerCaseIncident.includes("graffiti") ||
+    lowerCaseIncident.includes("property") ||
+    lowerCaseIncident.includes("theft")
+  ) {
+    return "highlight-orange"; // Property damage crimes - ORANGE
+  } else {
+    return "highlight-yellow"; // Any other crime not mentioned above - YELLOW
+  }
+};
+
 function dataMarker(data) {
+    let block = fixBlock(data.block);
+   let caseNumber = data.case_number;
+   let date = data.date;
+   let time = data.time;
+   let incident = data.incident;
   //make address all lowercase
-  let address = data.toLowerCase();
+  let address = block.toLowerCase();
   let url = "";
   if (address.includes(" and")) {
     address = address.split(" ");
@@ -541,7 +574,7 @@ function dataMarker(data) {
       }
     }
     address = address.join(" ");
-   address = address + " " + ", st.paul, Minnesota";
+   address = address + " " + "st.paul";
     if (address.includes(" ")) {
       //string substitution to turn all spaces to +
       address = address.replace(/\s+/g, "+");
@@ -581,9 +614,28 @@ function dataMarker(data) {
       let lon1 = parseFloat(loc1data.lon);
       map.leaflet.setView([lat1, lon1], 16);
       //draw a popup at the location and when off clicked close the pop up
-      let popup1 = L.popup().setLatLng([lat1, lon1]);
-      popup1.setContent(loc1data.display_name);
-      popup1.openOn(map.leaflet);
+     // let popup1 = L.popup().setLatLng([lat1, lon1]);
+     // popup1.setContent(loc1data.display_name);
+      //popup1.openOn(map.leaflet);
+      const customIcon = L.icon({
+            iconUrl: '../markerpic(1).png', // Replace with the path to your custom marker image
+            iconSize: [32, 32], // Adjust the size of your custom marker
+            iconAnchor: [16, 32], // Adjust the anchor point of your custom marker
+            popupAnchor: [0, -32], // Adjust the popup anchor of your custom marker
+          });
+
+          // Create a marker with the custom icon at the specified location
+          const marker = L.marker([lat1, lon1], { icon: customIcon })
+            .addTo(map.leaflet)
+            .bindPopup( `Information: ${date}, ${time}, ${incident}`);
+            
+            // Check if the marker was successfully added
+            if (marker) {
+            // Optionally, open the popup when the marker is added
+            marker.openPopup();
+            } else {
+            console.error('Marker creation failed.');
+            }
 
       //change place holder in input box to location entered
       document.getElementById("search").placeholder = loc1data.display_name;
@@ -654,54 +706,14 @@ function dataMarker(data) {
         class="cell small-9"
         style="max-height: 300px; overflow-y: auto; z-index: 1; height: 300px"
       >
-        <table style="overflow-y: scroll">
-          <thead style="position: sticky">
-            <tr>
-              <th>Date</th>
-              <!--<th>Code</th>-->
-              <th>Incident type</th>
-              <th>Police grid</th>
-              <th>Neighborhood</th>
-              <th>Block</th>
-              <th></th>
-              <th></th>
-            </tr>
-          </thead>
-
-          <tbody id="tablebody" style="text-align: center; font-size: small">
-            <tr
-              v-for="(crime) in crimes"
-              :key="crime.case_number"
-              :class="getCrimeCategoryClass(crime.code)"
-            >
-              <td>{{ crime.date }}</td>
-              <!-- <td>{{ crime.code }}</td> -->
-              <td>{{ crime.incident }}</td>
-              <td>{{ crime.police_grid }}</td>
-              <td>{{ neighborhoods[crime.neighborhood_number] }}</td>
-              <td>{{ fixBlock(crime.block) }}</td>
-              <td>
-                <button @click="dataMarker(fixBlock(crime.block))">View</button>
-              </td>
-              <td>
-                <button @click="deleteCase(crime.case_number)">Delete</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
-        <br />
+      <CrimeTable
+      :crimes="crimes"
+      :neighborhoods="neighborhoods"
+      :styleTableRows="styleTableRows"
+      :fixBlock="fixBlock"
+      :dataMarker="dataMarker"
+      :deleteCase="deleteCase"
+    />
       </div>
 
       <dialog id="my-dialog">
@@ -802,18 +814,5 @@ function dataMarker(data) {
   font-size: 16px;
   /* Add more styles as needed */
 }
-.violent-crime-even,
-.violent-crime-odd {
-  background-color: red;
-}
 
-.property-crime-even,
-.property-crime-odd {
-  background-color: blue;
-}
-
-.other-crime-even,
-.other-crime-odd {
-  background-color: orange;
-}
 </style>
