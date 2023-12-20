@@ -23,31 +23,50 @@ let map = reactive({
     
     
     */
-    {
-      location: [44.942068, -93.020521],
-      marker: "1,Conway/Battlecreek/Highwood",
-    },
-    { location: [44.977413, -93.025156], marker: "2,Greater East Side" },
-    { location: [44.931244, -93.079578], marker: "3,West Side" },
-    { location: [44.956192, -93.060189], marker: "4,Dayton's Bluff" },
-    { location: [44.978883, -93.068163], marker: "5,Payne/Phalen" },
-    { location: [44.975766, -93.113887], marker: "6,North End" },
-    { location: [44.959639, -93.121271], marker: "7,Thomas/Dale(Frogtown)" },
-    { location: [44.9477, -93.128505], marker: "8,Summit/University" },
-    { location: [44.930276, -93.119911], marker: "9,West Seventh" },
-    { location: [44.982752, -93.14791], marker: "10,Como" },
-    { location: [44.963631, -93.167548], marker: "11,Hamline/Midway" },
-    { location: [44.973971, -93.197965], marker: "12,St. Anthony" },
-    { location: [44.949043, -93.178261], marker: "13,Union Park" },
-    { location: [44.934848, -93.176736], marker: "14,Macalester-Groveland" },
-    { location: [44.913106, -93.170779], marker: "15, Highland" },
-    { location: [44.937705, -93.136997], marker: "16, Summit Hill" },
-    { location: [44.949203, -93.093739], marker: "17,Capitol River" },
+    { location: [44.942068, -93.020521], marker: "null,", neighborhood: "1: Conway/Battlecreek/Highwood "},
+    { location: [44.977413, -93.025156], marker: "null,", neighborhood: "2: Greater East Side "},
+    { location: [44.931244, -93.079578], marker: "null,", neighborhood: "3: West Side "},
+    { location: [44.956192, -93.060189], marker: "null,", neighborhood: "4: Dayton's Bluff "},
+    { location: [44.978883, -93.068163], marker: "null,", neighborhood: "5: Payne/Phalen "},
+    { location: [44.975766, -93.113887], marker: "null,", neighborhood: "6: North End "},
+    { location: [44.959639, -93.121271], marker: "null,", neighborhood: "7: Thomas/Dale(Frogtown) "},
+    { location: [44.9477, -93.128505], marker: "null,", neighborhood: "8: Summit/University "},
+    { location: [44.930276, -93.119911], marker: "null,", neighborhood: "9: West Seventh "},
+    { location: [44.982752, -93.14791], marker: "null,", neighborhood: "10: Como "},
+    { location: [44.963631, -93.167548], marker: "null,", neighborhood: "11: Hamline/Midway "},
+    { location: [44.973971, -93.197965], marker: "null,", neighborhood: "12: St. Anthony "},
+    { location: [44.949043, -93.178261], marker: "null,", neighborhood: "13: Union Park "},
+    { location: [44.934848, -93.176736], marker: "null,", neighborhood: "14: Macalester-Groveland "},
+    { location: [44.913106, -93.170779], marker: "null,", neighborhood: "15: Highland "},
+    { location: [44.937705, -93.136997], marker: "null,", neighborhood: "16:  Summit Hill "},
+    { location: [44.949203, -93.093739], marker: "null,", neighborhood: "17: Capitol River "},
+
   ],
 });
+const neighborhoods = {
+  1: "Conway/Battlecreek/Highwood",
+  2: "Greater East Side",
+  3: "West Side",
+  4: "Dayton's Bluff",
+  5: "Payne/Phalen",
+  6: "North End",
+  7: "Thomas/Dale(Frogtown)",
+  8: "Summit/University",
+  9: "West Seventh",
+  10: "Como",
+  11: "Hamline/Midway",
+  12: "St. Anthony",
+  13: "Union Park",
+  14: "Macalester-Groveland",
+  15: "Highland",
+  16: "Summit Hill",
+  17: "Capitol River",
+};
 
+let crimes = reactive({});
+let initialized = ref(false);
 // Vue callback for once <template> HTML has been added to web page
-onMounted(() => {
+    onMounted(() => {
   // Create Leaflet map (set bounds and valied zoom levels)
   map.leaflet = L.map("leafletmap").setView(
     [map.center.lat, map.center.lng],
@@ -83,10 +102,23 @@ onMounted(() => {
   map.neighborhood_markers.forEach((value) => {
     //for each neighborhood replace the marker with a numbered marker
     let marker = L.marker(value.location).addTo(map.leaflet);
-    marker.bindPopup(`<b>${value.marker}</b>`);
+    marker.bindPopup(`<b>${value.neighborhood}</b>`);                                     //changed
     value.marker = marker;
   });
+
+
+  map.leaflet.on("moveend", () => {
+    // Call the function to limit crimes based on the new map bounds
+    limitCrimesToVisibleNeighborhoods();
+  });
+  map.leaflet.on("zoomend", () => {
+    // Call the function to limit crimes based on the new map bounds
+    limitCrimesToVisibleNeighborhoods();
+  });
+
+
 });
+
 
 // FUNCTIONS
 // Function called once user has entered REST API URL
@@ -100,25 +132,32 @@ function initializeCrimes() {
     .then((response) => {
       return response.json();
     })
-    .then((result) => {
-      console.log(result[0].case_number);
-      fillTable(result);
+    .then((incidents) => {
+        crimes = reactive(incidents);
+        initialized.value = true;
+      console.log(incidents[0].case_number);
+      var counter = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+      incidents.forEach((incident) => {
+        counter[incident.neighborhood_number-1]++;
+      });
+      map.neighborhood_markers.forEach((value,index) => {
+        value.marker._popup.setContent(value.neighborhood+"<br/> Crimes Commited: "+counter[index].toString());  //changed
+      });
     })
     .catch((error) => {
       console.log("Error:", error);
     });
+
+
+
   /* fetch(url)
       
   */
   //get data and use fillTable to populate crimTBL
 }
-
+/*
 let fillTable = function (data) {
-  /*
-      ["Date", "Code", "Incident Type", "Police Grid", "Neighborhood", "Block"],
-      data,
-      ['date', 'code', 'incident', 'police_grid', 'neighborhood_number', 'block']
-      */
+
   let rplmt = "<tbody> \n";
   data.forEach((value) => {
     rplmt = rplmt + "<tr>\n";
@@ -126,9 +165,9 @@ let fillTable = function (data) {
     rplmt = rplmt + "<td>" + value.code + "</td>\n";
     rplmt = rplmt + "<td>" + value.incident + "</td>\n";
     rplmt = rplmt + "<td>" + value.police_grid + "</td>\n";
-    rplmt = rplmt + "<td>" + value.neighborhood_number + "</td>\n";
+    rplmt = rplmt + "<td>" + value.neighborhood_number.map((x) => neighborhoods[x]) + "</td>\n";
     //replace x in block with 0s if before a space in JSON value.block
-
+console.log(value.block);
     let blockwords = JSON.stringify(value.block, null, 2).split(" ");
     if (blockwords[0].includes("X")) {
       for (let i = 0; i < blockwords[0].length; i++) {
@@ -137,12 +176,7 @@ let fillTable = function (data) {
     }
     blockwords = blockwords.join(" ");
     //if blockword contains quotations delete them all
-    console.log(blockwords.substring(0, 1));
-    if (blockwords.substring(0, 1).includes('"')) {
-      //blockwords[0]="";
-      blockwords.substring(0, 1) = "";
-    }
-    
+   
     value.block=blockwords;
 
     rplmt = rplmt + "<td button onclick='searchLoClick(";
@@ -154,7 +188,7 @@ let fillTable = function (data) {
   document.getElementById("tablebody").innerHTML = rplmt;
   // console.log()
 };
-
+*/
 function searchLoClick(address) {
   let url1 =
     "https://nominatim.openstreetmap.org/search?q=" +
@@ -223,12 +257,13 @@ function searchLo() {
   }
   if (!input1.includes("st.paul")) {
     //include st.paul in location search to make sure it is within the city
-    input1 = input1 + " " + "st.paul";
+    input1 = input1 + " " + ", st.paul, Minnesota";
   }
   if (input1.includes(" ")) {
     //string substitution to turn all spaces to +
     input1 = input1.replace(/\s+/g, "+");
   }
+  input1 = encodeURIComponent(input1);
 
   let url1 =
     "https://nominatim.openstreetmap.org/search?q=" +
@@ -347,6 +382,216 @@ function submitForm() {
       });
   }
 }
+function deleteCase(caseNum) {
+    console.log(caseNum);
+const caseNumber =  {case_number: caseNum };
+console.log(caseNumber);
+  fetch("http://localhost:8000/remove-incident", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(caseNumber),
+   
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      return response.json();
+    })
+    .then((data) => {
+      console.log("Delete request successful:", data);
+      alert("Success! Case has been deleted");
+    })
+    .catch((error) => {
+      console.error("Error making Delete request:", error.message);
+      console.error("Full error object:", error); // Log the full error object
+      alert("Error deleting your new case");
+    });
+}
+async function getCoordinates(data) {
+  console.log("lookin");
+  try {
+    // Ensure data is a string before applying toLowerCase
+    let address = typeof data === "string" ? data.toLowerCase() : "";
+
+    // Handle "and" in the address
+    address = address.replace(/ and /g, "&");
+
+    // Ensure the address includes St. Paul, Minnesota
+    address = `${address}, St. Paul, Minnesota`;
+
+    // Replace spaces with '+'
+    const encodedAddress = encodeURIComponent(address);
+
+    // Build the Nominatim API URL
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1`;
+
+    // Fetch data from the Nominatim API
+    const response = await fetch(url);
+    const responseData = await response.json();
+
+    // Check if coordinates were found
+    if (responseData && responseData.length > 0) {
+      const coordinates = {
+        latitude: parseFloat(responseData[0].lat),
+        longitude: parseFloat(responseData[0].lon),
+      };
+      return coordinates;
+    } else {
+      throw new Error("Coordinates not found for the address.");
+    }
+  } catch (error) {
+    console.error("Error fetching coordinates:", error);
+    throw error;
+  }
+}
+
+async function limitCrimesToVisibleNeighborhoods() {
+  if (map.leaflet) {
+    const visibleBounds = map.leaflet.getBounds();
+    const minLat = visibleBounds.getSouth();
+    const minLng = visibleBounds.getWest();
+    const maxLat = visibleBounds.getNorth();
+    const maxLng = visibleBounds.getEast();
+
+    const nwCoordinates = await getCoordinates({
+      latitude: minLat,
+      longitude: minLng,
+    });
+    const seCoordinates = await getCoordinates({
+      latitude: maxLat,
+      longitude: maxLng,
+    });
+
+    // Filter crimes based on coordinates
+    crimes = Object.values(crimes).filter((crime) => {
+      const crimeCoordinates = { latitude: crime.lat, longitude: crime.lon };
+    });
+  } else {
+    console.error("Leaflet map is not initialized or is null.");
+  }
+}
+
+function fixBlock(block) {
+  let blocks = block.split(" ");
+  if (blocks[0].includes("X")) {
+    for (let i = 0; i < block.length; i++) {
+      blocks[0] = blocks[0].replace("X", "0");
+    }
+  }
+  blocks = blocks.join(" ");
+  return blocks;
+}
+function getCrimeCategoryClass(code, index) {
+  if (code >= 0 && code <= 875) {
+    return index % 2 === 0 ? "violent-crime-even" : "violent-crime-odd";
+  } else if (code >= 876 && code <= 1900) {
+    return index % 2 === 0 ? "property-crime-even" : "property-crime-odd";
+  } else {
+    return index % 2 === 0 ? "other-crime-even" : "other-crime-odd";
+  }
+}
+//function that maps code to incident type
+function codeToIncident(code) {
+  if (code > 99 && code < 200) {
+    return "Homicide";
+  } else if (code > 199 && code < 250) {
+    return "Rape";
+  } else if (code > 299 && code < 400) {
+    return "Robbery";
+  } else if (code > 399 && code < 475) {
+    return "Aggravated Assault";
+  } else if (code > 499 && code < 600) {
+    return "Burglary";
+  } else if (code > 599 && code < 700) {
+    return "Theft";
+  } else if (code > 699 && code < 800) {
+    return "Motor Vehicle Theft";
+  } else if (code > 799 && code < 875) {
+    return "Domestic Assault";
+  } else if (code > 874 && code < 1000) {
+    return "Arson";
+  } else if (code > 1300 && code < 1500) {
+    return "Graffiti/Property Damage";
+  } else if (code > 1700 && code < 1900) {
+    return "Narcotics";
+  } else if (code > 2000 && code < 3000) {
+    return "Weapons Discharge";
+  } else if (code > 3000 && code < 4000) {
+    return "Death-Investigation";
+  } else if (code == 9954) {
+    return "Police Visit";
+  } else if (code == 9959) {
+    return "Community Engagement";
+  } else if (code == 9986) {
+    return "Foot Patrol";
+  }
+}
+function dataMarker(data) {
+  //make address all lowercase
+  let address = data.toLowerCase();
+  let url = "";
+  if (address.includes(" and")) {
+    address = address.split(" ");
+    for (let i = 0; i < address.length; i++) {
+      if (address[i] == "and") {
+        address[i] = "&";
+      }
+    }
+    address = address.join(" ");
+   address = address + " " + ", st.paul, Minnesota";
+    if (address.includes(" ")) {
+      //string substitution to turn all spaces to +
+      address = address.replace(/\s+/g, "+");
+    }
+
+    console.log(address);
+    address = encodeURIComponent(address);
+
+    url =
+      "https://nominatim.openstreetmap.org/search?q=" +
+      address +
+      "&format=json&limit=1";
+  } else {
+    address = address + " " + ", st.paul, Minnesota";
+    if (address.includes(" ")) {
+      //string substitution to turn all spaces to +
+      address = address.replace(/\s+/g, "+");
+    }
+    url =
+      "https://nominatim.openstreetmap.org/search?q=" +
+      address +
+      "&format=json&limit=1";
+  }
+  console.log(url);
+  //if location is not found or is outside of st.paul clamp input values to st.paul
+
+  //change center of map to location entered and zoom in
+  Promise.all([fetch(url)])
+    .then((responses) => {
+      return Promise.all([responses[0].json()]);
+    })
+    .then((data) => {
+      console.log(data);
+      let loc1data = data[0][0];
+
+      let lat1 = parseFloat(loc1data.lat);
+      let lon1 = parseFloat(loc1data.lon);
+      map.leaflet.setView([lat1, lon1], 16);
+      //draw a popup at the location and when off clicked close the pop up
+      let popup1 = L.popup().setLatLng([lat1, lon1]);
+      popup1.setContent(loc1data.display_name);
+      popup1.openOn(map.leaflet);
+
+      //change place holder in input box to location entered
+      document.getElementById("search").placeholder = loc1data.display_name;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
 </script>
 
 <template>
@@ -374,7 +619,6 @@ function submitForm() {
           class="cell small-8 auto"
           type="text"
           placeholder="Enter Address"
-          v-model="crime_url"
         />
         <button
           class="button cell small-2"
@@ -386,35 +630,64 @@ function submitForm() {
         </button>
       </div>
     </div>
+    <button
+      class="button cell small-12"
+      type="button"
+      style="hover: orange"
+      @click="showForm()"
+    >
+      Add New Case
+    </button>
     <div
       class="grid-x grid-padding-x"
       style="background-color: antiquewhite; padding: 20px; border-radius: 10px"
     >
       <div
         id="leafletmap"
-        class="cell large-6 medium-12 small-12"
-        style="border-radius: 10px; padding-top: 600px"
+        class="cell medium-12 small-12"
+        style="border-radius: 10px; padding-top: 200px"
       ></div>
 
       <div
-        class="cell small-12 large-6"
-        style="max-height: 300px; overflow-y: auto"
+        v-if="initialized"
+        id="table"
+        class="cell small-9"
+        style="max-height: 300px; overflow-y: auto; z-index: 1; height: 300px"
       >
-        <table id="table" style="overflow-y: scroll">
+        <table style="overflow-y: scroll">
           <thead style="position: sticky">
             <tr>
               <th>Date</th>
-              <th>Code</th>
+              <!--<th>Code</th>-->
               <th>Incident type</th>
               <th>Police grid</th>
               <th>Neighborhood</th>
               <th>Block</th>
+              <th></th>
+              <th></th>
             </tr>
           </thead>
-          <tbody
-            id="tablebody"
-            style="text-align: center; font-size: small"
-          ></tbody>
+
+          <tbody id="tablebody" style="text-align: center; font-size: small">
+            <tr
+              v-for="(crime) in crimes"
+              :key="crime.case_number"
+              :class="getCrimeCategoryClass(crime.code)"
+            >
+              <td>{{ crime.date }}</td>
+              <!-- <td>{{ crime.code }}</td> -->
+              <td>{{ crime.incident }}</td>
+              <td>{{ crime.police_grid }}</td>
+              <td>{{ neighborhoods[crime.neighborhood_number] }}</td>
+              <td>{{ fixBlock(crime.block) }}</td>
+              <td>
+                <button @click="dataMarker(fixBlock(crime.block))">View</button>
+              </td>
+              <td>
+                <button @click="deleteCase(crime.case_number)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
         </table>
         <br />
         <br />
@@ -430,14 +703,7 @@ function submitForm() {
         <br />
         <br />
       </div>
-      <button
-        class="button cell small-12"
-        type="button"
-        style="hover: orange"
-        @click="showForm()"
-      >
-        Add New Case
-      </button>
+
       <dialog id="my-dialog">
         <span class="close" @click="closeForm">&#10006;</span>
         <br />
@@ -530,5 +796,24 @@ function submitForm() {
 
 .close {
   float: right;
+}
+.custom-style {
+  background-color: lightblue;
+  font-size: 16px;
+  /* Add more styles as needed */
+}
+.violent-crime-even,
+.violent-crime-odd {
+  background-color: red;
+}
+
+.property-crime-even,
+.property-crime-odd {
+  background-color: blue;
+}
+
+.other-crime-even,
+.other-crime-odd {
+  background-color: orange;
 }
 </style>
